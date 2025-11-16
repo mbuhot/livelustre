@@ -1,8 +1,5 @@
-import {
-  Option$isSome,
-  Option$Some$0,
-} from "@gleam/gleam_stdlib/gleam/option.mjs";
-import { from } from "@gleam/lustre/lustre/effect.mjs";
+import { Option$isSome, Option$Some$0 } from "../gleam_stdlib/gleam/option.mjs";
+import { from } from "../lustre/lustre/effect.mjs";
 
 export function push_event(element_selector, event_name, payload, on_reply) {
   return from((dispatch) => {

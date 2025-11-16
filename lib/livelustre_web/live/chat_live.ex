@@ -17,8 +17,6 @@ defmodule LivelustreWeb.ChatLive do
   def handle_event("chat-message", %{"message" => message}, socket) do
     # Reverse the message as a fun server response
     reply = String.reverse(message)
-
-    # Reply with just the map - the interceptor will handle event naming
     {:reply, %{reply: reply}, socket}
   end
 end

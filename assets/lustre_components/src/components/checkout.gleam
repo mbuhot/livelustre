@@ -76,6 +76,7 @@ pub type SpecialOffer {
 pub type Msg {
   NextStep
   PreviousStep
+  ResetCheckout
   UpdateEmail(String)
   UpdateName(String)
   UpdateAddress(String)
@@ -198,6 +199,18 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       let combined_eff = effect.batch([save_eff, url_eff])
 
       #(new_model, combined_eff)
+    }
+
+    ResetCheckout -> {
+      // Reset to initial state
+      let #(initial_model, _) = init(Nil)
+
+      // Update URL and clear saved state
+      let save_eff = save_state_effect(initial_model)
+      let url_eff = update_url_effect(CartReview)
+      let combined_eff = effect.batch([save_eff, url_eff])
+
+      #(initial_model, combined_eff)
     }
 
     UpdateEmail(email) -> {
@@ -820,9 +833,10 @@ fn view_order_placed(_model: Model) -> Element(Msg) {
         "Thank you for your order. You'll receive a confirmation email shortly.",
       ),
     ]),
-    html.button([attribute.class("btn btn-primary")], [
-      element.text("Continue Shopping"),
-    ]),
+    html.button(
+      [attribute.class("btn btn-primary"), event.on_click(ResetCheckout)],
+      [element.text("Continue Shopping")],
+    ),
   ])
 }
 

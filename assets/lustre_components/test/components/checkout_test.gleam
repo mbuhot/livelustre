@@ -221,3 +221,38 @@ pub fn apply_discount_code_triggers_application_state_test() {
   assert model_before.discount_code == "SAVE10"
   assert model_after.discount_code == "SAVE10"
 }
+
+pub fn continue_shopping_button_resets_to_initial_state_test() {
+  // Arrange: Complete the entire checkout flow to OrderPlaced
+  let sim =
+    start_checkout()
+    |> at_customer_details_step
+    |> simulate.message(checkout.UpdateEmail("test@example.com"))
+    |> simulate.message(checkout.UpdateName("Test User"))
+    |> simulate.message(checkout.NextStep)
+    |> simulate.message(checkout.UpdateAddress("123 Main St"))
+    |> simulate.message(checkout.UpdateCity("Brisbane"))
+    |> simulate.message(checkout.UpdateState("QLD"))
+    |> simulate.message(checkout.UpdateZip("4000"))
+    |> simulate.message(checkout.AddressValidated(True, []))
+    |> simulate.message(checkout.NextStep)
+    |> simulate.message(checkout.NextStep)
+    |> simulate.message(checkout.NextStep)
+    |> simulate.message(checkout.ToggleMarketingConsent)
+    |> simulate.message(checkout.NextStep)
+    |> simulate.message(checkout.OrderConfirmed("ORDER-123"))
+
+  let model = simulate.model(sim)
+  assert model.step == checkout.OrderPlaced
+
+  // Act: Click "Continue Shopping" button
+  let sim = simulate.click(sim, on: button("Continue Shopping"))
+
+  // Assert: Should reset to initial CartReview state
+  let model = simulate.model(sim)
+  assert model.step == checkout.CartReview
+  assert model.customer.email == ""
+  assert model.customer.name == ""
+  assert model.shipping.address == ""
+  assert model.marketing_consent == False
+}

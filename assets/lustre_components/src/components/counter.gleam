@@ -1,9 +1,11 @@
+import gleam/dynamic/decode
 import gleam/int
 import gleam/json
+import gleam/option
 import gleam/result
+import liveview_client
 import lustre
 import lustre/attribute
-import lustre/component
 import lustre/effect.{type Effect}
 import lustre/element.{type Element}
 import lustre/element/html
@@ -19,7 +21,7 @@ pub type Model {
 pub type Msg {
   Increment
   Decrement
-  SetCount(Int)
+  CountUpdated(Int)
 }
 
 // INIT ------------------------------------------------------------------------
@@ -33,18 +35,42 @@ pub fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
     Increment -> {
-      let new_count = model.count + 1
-      let payload = json.object([#("count", json.int(new_count))])
-      let eff = effect.event("phx-counter-changed", payload)
-      #(Model(count: new_count), eff)
+      let payload = json.object([#("count", json.int(model.count))])
+      let eff =
+        liveview_client.push_event(
+          "lustre-counter",
+          "increment",
+          payload,
+          option.Some(fn(reply) {
+            let decoder =
+              decode.field("count", decode.int, fn(count) {
+                decode.success(CountUpdated(count))
+              })
+            decode.run(reply, decoder)
+            |> result.unwrap(CountUpdated(model.count))
+          }),
+        )
+      #(model, eff)
     }
     Decrement -> {
-      let new_count = model.count - 1
-      let payload = json.object([#("count", json.int(new_count))])
-      let eff = effect.event("phx-counter-changed", payload)
-      #(Model(count: new_count), eff)
+      let payload = json.object([#("count", json.int(model.count))])
+      let eff =
+        liveview_client.push_event(
+          "lustre-counter",
+          "decrement",
+          payload,
+          option.Some(fn(reply) {
+            let decoder =
+              decode.field("count", decode.int, fn(count) {
+                decode.success(CountUpdated(count))
+              })
+            decode.run(reply, decoder)
+            |> result.unwrap(CountUpdated(model.count))
+          }),
+        )
+      #(model, eff)
     }
-    SetCount(count) -> #(Model(count: count), effect.none())
+    CountUpdated(count) -> #(Model(count: count), effect.none())
   }
 }
 
@@ -128,14 +154,7 @@ pub fn view(model: Model) -> Element(Msg) {
 // COMPONENT -------------------------------------------------------------------
 
 pub fn register() -> Result(Nil, lustre.Error) {
-  let app =
-    lustre.component(init, update, view, [
-      component.on_attribute_change("count", fn(value) {
-        int.parse(value)
-        |> result.map(SetCount)
-        |> result.replace_error(Nil)
-      }),
-    ])
+  let app = lustre.component(init, update, view, [])
 
   lustre.register(app, "lustre-counter")
 }
