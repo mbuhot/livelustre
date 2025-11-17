@@ -32,13 +32,15 @@ pub type Msg {
   UpdateInput(String)
   SendMessage
   ReceiveReply(String)
+  ServerMessage(String)
   ServerError(String)
 }
 
 // INIT ------------------------------------------------------------------------
 
 pub fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
-  #(Model(messages: [], input: ""), effect.none())
+  let subscribe_effect = subscribe_to_server_messages()
+  #(Model(messages: [], input: ""), subscribe_effect)
 }
 
 // EFFECTS ---------------------------------------------------------------------
@@ -62,6 +64,18 @@ fn send_message(text: String) -> Effect(Msg) {
     payload,
     Some(decode_chat_reply),
   )
+}
+
+fn subscribe_to_server_messages() -> Effect(Msg) {
+  liveview_client.subscribe_to_event("server-message", fn(detail) {
+    let decoder =
+      decode.field("message", decode.string, fn(message) {
+        decode.success(ServerMessage(message))
+      })
+
+    decode.run(detail, decoder)
+    |> result.unwrap(ServerError("Failed to decode server message"))
+  })
 }
 
 // UPDATE ----------------------------------------------------------------------
@@ -90,6 +104,13 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       // Add server reply to history
       let reply = Message(text: text, from: Server)
       let new_messages = [reply, ..model.messages]
+      #(Model(..model, messages: new_messages), effect.none())
+    }
+
+    ServerMessage(text) -> {
+      // Add server-initiated message to history
+      let server_msg = Message(text: text, from: Server)
+      let new_messages = [server_msg, ..model.messages]
       #(Model(..model, messages: new_messages), effect.none())
     }
 

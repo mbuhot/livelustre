@@ -13,23 +13,107 @@ This project showcases how to build modern web applications by combining:
 ## Demo Components
 
 ### Counter (`/counter`)
-A simple incrementing counter that demonstrates:
-- Basic Lustre component with state management
-- Event communication from Lustre to LiveView
-- LiveView assign updates to Lustre
+
+The counter demonstrates server-driven state updates via HTML attributes. When you click increment or decrement, the Lustre component sends an event to LiveView, which performs the arithmetic and updates its assigns. LiveView's DOM patching automatically updates the `count` attribute on the custom element, triggering Lustre's `on_attribute_change` handler to update the UI.
+
+**Key files:**
+- [counter.gleam](assets/lustre_components/src/components/counter.gleam) - Lustre component
+- [counter_live.ex](lib/livelustre_web/live/counter_live.ex) - LiveView module
+
+```elixir
+# LiveView renders the count into an attribute on the custom element
+~H"""
+<lustre-counter id="counter" count={@count}></lustre-counter>
+"""
+```
+
+```gleam
+// Lustre component watches for attribute changes
+component.on_attribute_change("count", fn(value) {
+  int.parse(value)
+  |> result.map(SetCount)
+  |> result.replace_error(Nil)
+})
+```
+
+```gleam
+// Button clicks will dispatch Increment or Decrement messages, which trigger a LiveView event effect.
+case msg {
+  Increment -> #(model, send_count_event("increment", model.count))
+  Decrement -> #(model, send_count_event("decrement", model.count))
+  ...
+}
+```
+
+```elixir
+# LiveView receives the event and updates assigns, triggering automatic re-render
+def handle_event("increment", %{"count" => count}, socket) do
+  {:noreply, assign(socket, count: count + 1)}
+end
+```
+
+ The event cycle is familiar to LiveView, but now gives the frontend explicit control over how attribute changes are applied to the UI.
 
 ### Chat (`/chat`)
-A chat interface showing:
-- Messaging from client to server
-- Handling user input
+
+The chat demonstrates bidirectional communication with both request-reply and server-initiated push. Users send messages that get reversed by the server (request-reply pattern), while the server independently pushes random notifications every 5 seconds using LiveView's `push_event`.
+
+**Key files:**
+- [chat.gleam](assets/lustre_components/src/components/chat.gleam) - Lustre component
+- [chat_live.ex](lib/livelustre_web/live/chat_live.ex) - LiveView module
+
+```elixir
+# Server sends periodic updates to the client
+def handle_info(:send_random_message, socket) do
+  message = Enum.random(@random_messages)
+  {:noreply, push_event(socket, "server-message", %{message: message})}
+end
+```
+
+```gleam
+// Lustre subscribes to server-initiated events on mount
+pub fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
+  let subscribe_effect = subscribe_to_server_messages()
+  #(Model(messages: [], input: ""), subscribe_effect)
+}
+```
+
+LiveView's standard patterns for event replies and server-pushed events can be used to communicate with the client.
 
 ### Checkout (`/checkout`)
-A complete e-commerce checkout flow featuring:
-- Multi-step wizard (Customer Details → Shipping Address → Order Review → Marketing Consent)
-- Server-side validation (address verification, discount codes)
-- LocalStorage integration for state persistence
-- URL parameter synchronization
-- Comprehensive UI testing with `lustre/dev/simulate`
+
+A complete e-commerce checkout flow showcasing the request-reply pattern with server-side validation. The Lustre component maintains local UI state but defers to the server for business logic like address validation and discount code verification. State persists in localStorage and syncs with URL parameters for bookmarkable progress.
+
+**Key files:**
+- [checkout.gleam](assets/lustre_components/src/components/checkout.gleam) - Lustre component
+- [checkout_live.ex](lib/livelustre_web/live/checkout_live.ex) - LiveView module
+- [checkout_test.gleam](assets/lustre_components/test/components/checkout_test.gleam) - Component tests
+- [commerce.ex](lib/livelustre/commerce.ex) - Business logic module
+
+```gleam
+// Lustre sends request and handles reply
+liveview_client.push_event(
+  "lustre-checkout",
+  "validate-address",
+  address_payload,
+  option.Some(fn(reply) {
+    // Decode server response and update UI
+    HandleValidationResult(reply)
+  })
+)
+```
+
+```elixir
+# LiveView validates and replies
+def handle_event("validate-address", address, socket) do
+  case Commerce.validate_address(address) do
+    {:ok} -> {:reply, %{valid: true}, socket}
+    {:error, errors} -> {:reply, %{valid: false, errors: errors}, socket}
+  end
+end
+```
+
+Complex client-side forms can maintain rich interactivity while keeping business logic on the server through the request-reply pattern. Includes comprehensive UI testing using Lustre's simulate module.
 
 ## Architecture Highlights
 
@@ -88,9 +172,3 @@ mix assets.deploy
 - Phoenix LiveView: https://hexdocs.pm/phoenix_live_view
 - Lustre: https://hexdocs.pm/lustre
 - Gleam: https://gleam.run/
-
-### Phoenix Resources
-- Guides: https://hexdocs.pm/phoenix/overview.html
-- Docs: https://hexdocs.pm/phoenix
-- Forum: https://elixirforum.com/c/phoenix-forum
-- Source: https://github.com/phoenixframework/phoenix

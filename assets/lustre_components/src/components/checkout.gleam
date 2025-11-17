@@ -997,9 +997,6 @@ fn parse_discount_reply(reply: Dynamic) -> Msg {
 }
 
 fn parse_validation_reply(reply: Dynamic) -> Msg {
-  // Debug: log the raw reply
-  log_reply(reply)
-
   // Decode the validation response
   let valid_decoder =
     decode.field("valid", decode.bool, fn(valid) {
@@ -1012,12 +1009,8 @@ fn parse_validation_reply(reply: Dynamic) -> Msg {
     })
 
   case decode.run(reply, valid_decoder) {
-    Ok(#(True, _)) -> {
-      log_string("Validation succeeded")
-      AddressValidated(True, [])
-    }
+    Ok(#(True, _)) -> AddressValidated(True, [])
     Ok(#(False, Some(errors_dict))) -> {
-      log_string("Validation failed with errors")
       // Convert dict to list of ValidationError
       let errors =
         errors_dict
@@ -1028,27 +1021,13 @@ fn parse_validation_reply(reply: Dynamic) -> Msg {
         })
       AddressValidated(False, errors)
     }
-    Ok(#(False, None)) -> {
-      log_string("Validation failed without errors")
-      AddressValidated(False, [])
-    }
-    Error(decode_errors) -> {
-      log_errors(decode_errors)
+    Ok(#(False, None)) -> AddressValidated(False, [])
+    Error(_decode_errors) ->
       AddressValidated(False, [
         ValidationError("address", "Failed to parse validation response"),
       ])
-    }
   }
 }
-
-@external(javascript, "../dom_ffi.mjs", "logReply")
-fn log_reply(reply: Dynamic) -> Nil
-
-@external(javascript, "../dom_ffi.mjs", "logString")
-fn log_string(message: String) -> Nil
-
-@external(javascript, "../dom_ffi.mjs", "logErrors")
-fn log_errors(errors: a) -> Nil
 
 // STATE PERSISTENCE -----------------------------------------------------------
 

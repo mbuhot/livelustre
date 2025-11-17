@@ -14,7 +14,6 @@ export function focus(root, selector) {
     }
 
     if (element) {
-      console.log("Focusing element:", selector, element);
       element.focus();
     } else {
       console.warn(
@@ -27,25 +26,11 @@ export function focus(root, selector) {
   }, 10);
 }
 
-export function logReply(reply) {
-  console.log("Raw reply:", reply, "Type:", typeof reply);
-  console.log("Reply JSON:", JSON.stringify(reply, null, 2));
-}
-
-export function logString(message) {
-  console.log(message);
-}
-
-export function logErrors(errors) {
-  console.error("Decode errors:", errors);
-}
-
 // localStorage helpers
 export function saveToLocalStorage(key, value) {
   try {
     // value is a Gleam Json object, stringify it for localStorage
     localStorage.setItem(key, JSON.stringify(value));
-    console.log("Saved to localStorage:", key, JSON.stringify(value));
   } catch (e) {
     console.error("Failed to save to localStorage:", e);
   }
@@ -58,7 +43,6 @@ export function loadFromLocalStorage(key) {
       return null;
     }
     const value = localStorage.getItem(key);
-    console.log("Loaded from localStorage:", key, value);
     return value ? JSON.parse(value) : null;
   } catch (e) {
     console.error("Failed to load from localStorage:", e);
@@ -73,7 +57,6 @@ export function removeFromLocalStorage(key) {
       return;
     }
     localStorage.removeItem(key);
-    console.log("Removed from localStorage:", key);
   } catch (e) {
     console.error("Failed to remove from localStorage:", e);
   }

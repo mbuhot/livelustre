@@ -9,19 +9,19 @@ defmodule LivelustreWeb.CounterLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <lustre-counter></lustre-counter>
+    <lustre-counter id="counter" count={@count}></lustre-counter>
     """
   end
 
   @impl true
   def handle_event("increment", %{"count" => count}, socket) do
     new_count = count + 1
-    {:reply, %{count: new_count}, socket}
+    {:noreply, assign(socket, count: new_count)}
   end
 
   @impl true
   def handle_event("decrement", %{"count" => count}, socket) do
     new_count = count - 1
-    {:reply, %{count: new_count}, socket}
+    {:noreply, assign(socket, count: new_count)}
   end
 end
