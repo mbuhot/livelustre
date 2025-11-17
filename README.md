@@ -96,10 +96,7 @@ liveview_client.push_event(
   "lustre-checkout",
   "validate-address",
   address_payload,
-  option.Some(fn(reply) {
-    // Decode server response and update UI
-    HandleValidationResult(reply)
-  })
+  option.Some(handle_validation_reply)
 )
 ```
 

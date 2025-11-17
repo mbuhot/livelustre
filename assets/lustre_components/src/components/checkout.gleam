@@ -37,6 +37,11 @@ pub type ValidationError {
   ValidationError(field: String, message: String)
 }
 
+type ValidationResponse {
+  Valid
+  Invalid(errors: dict.Dict(String, String))
+}
+
 pub type Step {
   CartReview
   CustomerDetails
@@ -248,26 +253,10 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     }
 
     ValidateAddress -> {
-      let payload =
-        json.object([
-          #("address", json.string(model.shipping.address)),
-          #("city", json.string(model.shipping.city)),
-          #("state", json.string(model.shipping.state)),
-          #("zip", json.string(model.shipping.zip)),
-        ])
-
-      let eff =
-        liveview_client.push_event(
-          "lustre-checkout",
-          "validate-address",
-          payload,
-          Some(fn(reply) {
-            // Parse the reply to get validation result and errors
-            parse_validation_reply(reply)
-          }),
-        )
-
-      #(Model(..model, is_validating: True), eff)
+      #(
+        Model(..model, is_validating: True),
+        validate_address_effect(model.shipping),
+      )
     }
 
     AddressValidated(is_valid, errors) -> {
@@ -996,33 +985,38 @@ fn parse_discount_reply(reply: Dynamic) -> Msg {
   }
 }
 
-fn parse_validation_reply(reply: Dynamic) -> Msg {
-  // Decode the validation response
-  let valid_decoder =
-    decode.field("valid", decode.bool, fn(valid) {
+fn validation_response_decoder() {
+  use is_valid <- decode.field("valid", decode.bool)
+  case is_valid {
+    True -> decode.success(Valid)
+    False ->
       decode.optional_field(
         "errors",
-        None,
-        decode.optional(decode.dict(decode.string, decode.string)),
-        fn(errors_opt) { decode.success(#(valid, errors_opt)) },
+        dict.new(),
+        decode.dict(decode.string, decode.string),
+        fn(errors) { decode.success(Invalid(errors)) },
       )
+  }
+}
+
+fn handle_validation_reply(reply: Dynamic) -> Msg {
+  let decoder =
+    validation_response_decoder()
+    |> decode.map(fn(result) {
+      case result {
+        Valid -> AddressValidated(True, [])
+        Invalid(errors_dict) -> {
+          errors_dict
+          |> dict.to_list
+          |> list.map(fn(e) { ValidationError(e.0, e.1) })
+          |> AddressValidated(False, _)
+        }
+      }
     })
 
-  case decode.run(reply, valid_decoder) {
-    Ok(#(True, _)) -> AddressValidated(True, [])
-    Ok(#(False, Some(errors_dict))) -> {
-      // Convert dict to list of ValidationError
-      let errors =
-        errors_dict
-        |> dict.to_list
-        |> list.map(fn(pair) {
-          let #(field, message) = pair
-          ValidationError(field, message)
-        })
-      AddressValidated(False, errors)
-    }
-    Ok(#(False, None)) -> AddressValidated(False, [])
-    Error(_decode_errors) ->
+  case decode.run(reply, decoder) {
+    Ok(result) -> result
+    Error(_) ->
       AddressValidated(False, [
         ValidationError("address", "Failed to parse validation response"),
       ])
@@ -1030,6 +1024,15 @@ fn parse_validation_reply(reply: Dynamic) -> Msg {
 }
 
 // STATE PERSISTENCE -----------------------------------------------------------
+
+fn encode_shipping_address(shipping: ShippingInfo) -> json.Json {
+  json.object([
+    #("address", json.string(shipping.address)),
+    #("city", json.string(shipping.city)),
+    #("state", json.string(shipping.state)),
+    #("zip", json.string(shipping.zip)),
+  ])
+}
 
 fn step_to_string(step: Step) -> String {
   case step {
@@ -1204,6 +1207,16 @@ fn restore_state(default_model: Model) -> Model {
 }
 
 // EFFECTS ---------------------------------------------------------------------
+
+fn validate_address_effect(shipping: ShippingInfo) -> Effect(Msg) {
+  let payload = encode_shipping_address(shipping)
+  liveview_client.push_event(
+    "lustre-checkout",
+    "validate-address",
+    payload,
+    Some(handle_validation_reply),
+  )
+}
 
 fn focus_effect(selector: String) -> Effect(Msg) {
   use _dispatch, root <- effect.after_paint
